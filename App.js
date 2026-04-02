@@ -4402,6 +4402,21 @@ function PremiumScreen({ navigation }) {
     return outcome;
   }, [restorePurchases]);
 
+  const handleManageSubscription = useCallback(async () => {
+    const targetUrl =
+      Platform.OS === "ios"
+        ? "https://apps.apple.com/account/subscriptions"
+        : "https://play.google.com/store/account/subscriptions";
+    try {
+      await Linking.openURL(targetUrl);
+    } catch (error) {
+      Alert.alert(
+        "Unable to open subscriptions",
+        "We couldn't open subscription management. Please open your App Store or Google Play subscriptions manually."
+      );
+    }
+  }, []);
+
   const premiumButtonLabel = premiumPriceString
     ? `Upgrade to Premium (${premiumPriceString})`
     : "Upgrade to Premium";
@@ -4510,6 +4525,16 @@ function PremiumScreen({ navigation }) {
             >
               Restore purchases
             </GoldButton>
+            {premiumActive ? (
+              <GoldButton
+                full
+                kind="secondary"
+                onPress={handleManageSubscription}
+                icon={<Ionicons name="settings-outline" size={18} color={palette.gold} />}
+              >
+                Manage Subscription
+              </GoldButton>
+            ) : null}
           </SectionCard>
         </ScrollView>
       </SafeAreaView>
