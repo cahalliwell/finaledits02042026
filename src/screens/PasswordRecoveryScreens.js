@@ -4,12 +4,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  SafeAreaView,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { CommonActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,8 +24,6 @@ export function ForgotPasswordScreen({
   theme,
   GoldButton,
 }) {
-  const { bottom } = useSafeAreaInsets();
-  const safeBottomPadding = theme.space(2.5) + Math.max(bottom, theme.space(1));
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -71,7 +69,7 @@ export function ForgotPasswordScreen({
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={[loginStyles.container, { paddingBottom: safeBottomPadding }]}
+            contentContainerStyle={loginStyles.container}
             keyboardShouldPersistTaps="handled"
           >
             <View style={loginStyles.card}>
@@ -134,8 +132,6 @@ export function ResetPasswordScreen({
   theme,
   GoldButton,
 }) {
-  const { bottom } = useSafeAreaInsets();
-  const safeBottomPadding = theme.space(2.5) + Math.max(bottom, theme.space(1));
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -258,7 +254,7 @@ export function ResetPasswordScreen({
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={[loginStyles.container, { paddingBottom: safeBottomPadding }]}
+            contentContainerStyle={loginStyles.container}
             keyboardShouldPersistTaps="handled"
           >
             <View style={loginStyles.card}>

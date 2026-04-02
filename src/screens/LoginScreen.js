@@ -6,12 +6,12 @@ import {
   Modal,
   Platform,
   Pressable,
+  SafeAreaView,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { handleAuthAction } from "../auth/authHandlers";
@@ -25,8 +25,6 @@ export default function LoginScreen({
   theme,
   GoldButton,
 }) {
-  const { bottom } = useSafeAreaInsets();
-  const safeBottomPadding = theme.space(2.5) + Math.max(bottom, theme.space(1));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -81,7 +79,7 @@ export default function LoginScreen({
         >
           <SafeAreaView style={{ flex: 1 }}>
             <ScrollView
-              contentContainerStyle={[loginStyles.container, { paddingBottom: safeBottomPadding }]}
+              contentContainerStyle={loginStyles.container}
               keyboardShouldPersistTaps="handled"
             >
               <View style={loginStyles.card}>
