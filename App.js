@@ -18,7 +18,6 @@ import {
   Platform,
   Pressable,
   Linking,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -40,7 +39,11 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import * as MailComposer from "expo-mail-composer";
 import {
   useFonts as useMarcellus,
@@ -139,6 +142,11 @@ const screenTopPadding = Platform.select({
 });
 
 const createLocalId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function useBottomSafeSpacing(basePadding = 0) {
+  const { bottom } = useSafeAreaInsets();
+  return basePadding + Math.max(bottom, theme.space(1));
+}
 
 
 // 🔗 Supabase client
@@ -757,6 +765,61 @@ function JournalProvider({ children }) {
     [entries, premiumMember, authReady, userId, updateEntriesState]
   );
 
+  const ensureEntryCloudBacked = useCallback(
+    async (id) => {
+      const targetEntry = entries.find((item) => item.id === id);
+      if (!targetEntry) {
+        throw new Error("Entry not found.");
+      }
+      if (targetEntry.synced && !String(targetEntry.id).startsWith("local-")) {
+        return { entryId: targetEntry.id, syncedNow: false };
+      }
+      if (!premiumMember || !authReady || !userId) {
+        throw new Error("Cloud backup requires an active Premium account.");
+      }
+      if (remoteCount >= 1000) {
+        throw new Error(
+          "Premium backup can store up to 1,000 entries. New readings will remain on this device."
+        );
+      }
+
+      const summaryPayload = {
+        primary: targetEntry.primary ?? null,
+        resulting: targetEntry.resulting ?? null,
+        primaryLines: targetEntry.primaryLines ?? [],
+        resultingLines: targetEntry.resultingLines ?? [],
+      };
+
+      const { data, error } = await supabase
+        .from("JournalEntries")
+        .insert({
+          user_id: userId,
+          question: targetEntry.question ?? "",
+          notes: targetEntry.note ?? "",
+          hexagram_primary: targetEntry.primary?.number ?? null,
+          hexagram_resulting: targetEntry.resulting?.number ?? null,
+          summary: JSON.stringify(summaryPayload),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const hydrated = { ...hydrateEntry(data, summaryPayload), synced: true };
+      updateEntriesState((prev) => {
+        const next = prev.map((item) => (item.id === id ? hydrated : item));
+        next.sort((a, b) => b.createdAt - a.createdAt);
+        return next;
+      });
+      setRemoteCount((prev) => prev + 1);
+
+      return { entryId: hydrated.id, syncedNow: true };
+    },
+    [entries, premiumMember, authReady, userId, remoteCount, hydrateEntry, updateEntriesState]
+  );
+
   const confirmDelete = useCallback(
     (id) => {
       Alert.alert("Delete entry?", "Are you sure you want to remove this entry?", [
@@ -779,6 +842,7 @@ function JournalProvider({ children }) {
       updateEntryNote,
       setEntryAiSummary,
       fetchEntryAiSummary,
+      ensureEntryCloudBacked,
       removeEntry,
       confirmDelete,
       refreshEntries: loadEntries,
@@ -790,6 +854,7 @@ function JournalProvider({ children }) {
       updateEntryNote,
       setEntryAiSummary,
       fetchEntryAiSummary,
+      ensureEntryCloudBacked,
       removeEntry,
       confirmDelete,
       loadEntries,
@@ -1467,6 +1532,7 @@ function ReadingModal({
   variant = "primary",
   changingSummaries = [],
 }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(4));
   if (!hex) return null;
   const essence = hex.essence || hex.judgment || "";
   const description = hex.description || hex.imageText || "";
@@ -1484,7 +1550,9 @@ function ReadingModal({
     >
       <GradientBackground>
         <SafeAreaView style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={stylesReading.container}>
+          <ScrollView
+            contentContainerStyle={[stylesReading.container, { paddingBottom: bottomPadding }]}
+          >
             <Pressable onPress={onClose} style={stylesReading.closeButton}>
               <Ionicons name="chevron-back" size={22} color={palette.ink} />
             </Pressable>
@@ -1783,6 +1851,7 @@ function GlowingHexagon() {
 
 // 🏠 Home screen
 function HomeScreen({ navigation, route }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(2));
   const [question, setQuestion] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -1947,7 +2016,7 @@ function HomeScreen({ navigation, route }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={stylesHome.container}
+            contentContainerStyle={[stylesHome.container, { paddingBottom: bottomPadding }]}
             keyboardShouldPersistTaps="handled"
           >
             <View style={stylesHome.headerRow}>
@@ -2202,6 +2271,7 @@ const stylesHome = StyleSheet.create({
 
 // 🎴 Cast screen
 function CastScreen({ route, navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(3));
   const { isPremium } = useAuth();
   const premiumMember = Boolean(isPremium);
   const { premiumPriceString } = useRevenueCat();
@@ -2279,7 +2349,7 @@ function CastScreen({ route, navigation }) {
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: theme.space(2.5),
-            paddingBottom: theme.space(3),
+            paddingBottom: bottomPadding,
             paddingTop: theme.space(2.5) + screenTopPadding,
           }}
         >
@@ -2383,6 +2453,7 @@ function CastScreen({ route, navigation }) {
 }
 
 function ManualCastingScreen({ route, navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(3));
   const { isPremium } = useAuth();
   const premiumMember = Boolean(isPremium);
   const { premiumPriceString } = useRevenueCat();
@@ -2404,7 +2475,7 @@ function ManualCastingScreen({ route, navigation }) {
           <ScrollView
             contentContainerStyle={{
               paddingHorizontal: theme.space(2.5),
-              paddingBottom: theme.space(3),
+              paddingBottom: bottomPadding,
               paddingTop: theme.space(2.5) + screenTopPadding,
             }}
           >
@@ -2470,7 +2541,7 @@ function ManualCastingScreen({ route, navigation }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={stylesManual.container}
+            contentContainerStyle={[stylesManual.container, { paddingBottom: bottomPadding }]}
             keyboardShouldPersistTaps="handled"
           >
             <Pressable
@@ -2676,6 +2747,7 @@ const stylesManual = StyleSheet.create({
 
 // 🧘 Results screen
 function ResultsScreen({ navigation, route }) {
+    const bottomPadding = useBottomSafeSpacing(theme.space(3));
     const { question, primary, resulting, primaryLines, resultingLines } =
       route.params || {};
     const [tab, setTab] = useState("Primary");
@@ -2812,7 +2884,7 @@ function ResultsScreen({ navigation, route }) {
           <ScrollView
             contentContainerStyle={{
               paddingHorizontal: theme.space(2.5),
-              paddingBottom: theme.space(3),
+              paddingBottom: bottomPadding,
               paddingTop: theme.space(2.5) + screenTopPadding,
             }}
           >
@@ -2973,6 +3045,7 @@ const stylesResults = StyleSheet.create({
 
 // 📚 Library screen
 function LibraryScreen({ navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(3));
   const [hexagrams, setHexagrams] = useState([]);
   const [show, setShow] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -3071,7 +3144,10 @@ function LibraryScreen({ navigation }) {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={stylesLibrary.flatList}
-                contentContainerStyle={stylesLibrary.listContent}
+                contentContainerStyle={[
+                  stylesLibrary.listContent,
+                  { paddingBottom: bottomPadding },
+                ]}
                 renderItem={({ item }) => (
                   <View
                     style={[
@@ -3193,6 +3269,7 @@ const formatDate = (date) => {
 };
 
 function JournalListScreen({ navigation, route }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(3));
   const { entries, confirmDelete } = useJournal();
   const [search, setSearch] = useState("");
   const [highlightId, setHighlightId] = useState(null);
@@ -3328,7 +3405,7 @@ function JournalListScreen({ navigation, route }) {
             renderItem={renderItem}
             ItemSeparatorComponent={() => <View style={{ height: theme.space(1) }} />}
             style={stylesJournal.list}
-            contentContainerStyle={stylesJournal.listContent}
+            contentContainerStyle={[stylesJournal.listContent, { paddingBottom: bottomPadding }]}
             ListEmptyComponent={
               <View style={stylesJournal.emptyState}>
                 <Ionicons name="book-outline" size={48} color={palette.gold} />
@@ -3469,10 +3546,11 @@ const wordCount = (text) => {
 };
 
 function JournalDetailScreen({ route, navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(4));
   const { id } = route.params || {};
   const { session, isPremium: premiumStatus } = useAuth();
   const userId = session?.user?.id;
-  const { entries, updateEntryNote, setEntryAiSummary, fetchEntryAiSummary } =
+  const { entries, updateEntryNote, setEntryAiSummary, fetchEntryAiSummary, ensureEntryCloudBacked } =
     useJournal();
   const { premiumPriceString } = useRevenueCat();
   const startPremiumPurchase = usePremiumPurchaseFlow();
@@ -3606,13 +3684,25 @@ function JournalDetailScreen({ route, navigation }) {
     setSummaryLoading(true);
 
     try {
+      let entryIdForInsight = entry.id;
+      const requiresCloudBackup =
+        !entry.synced || String(entry.id).startsWith("local-");
+
+      if (requiresCloudBackup) {
+        const cloudSyncResult = await ensureEntryCloudBacked(entry.id);
+        entryIdForInsight = cloudSyncResult.entryId;
+        if (cloudSyncResult.syncedNow && cloudSyncResult.entryId !== entry.id) {
+          navigation.setParams({ id: cloudSyncResult.entryId });
+        }
+      }
+
       // Reuse any cached AI insight before making a new request
       let summaryText = aiSummary || entry.aiSummary || "";
       let generatedFresh = false;
 
       if (!summaryText) {
         try {
-          summaryText = await fetchEntryAiSummary(entry.id);
+          summaryText = await fetchEntryAiSummary(entryIdForInsight);
         } catch (lookupError) {
           console.log(
             "AI summary lookup error:",
@@ -3622,7 +3712,7 @@ function JournalDetailScreen({ route, navigation }) {
       }
 
       if (!summaryText) {
-        const payload = { entry_id: entry.id, user_id: userId };
+        const payload = { entry_id: entryIdForInsight, user_id: userId };
         console.log("Invoking AI summary with payload:", payload);
 
         const accessToken = session?.access_token || SUPABASE_ANON_KEY;
@@ -3668,7 +3758,7 @@ function JournalDetailScreen({ route, navigation }) {
 
       setSummaryError("");
       setAiSummary(summaryText);
-      setEntryAiSummary(entry.id, summaryText);
+      setEntryAiSummary(entryIdForInsight, summaryText);
       setHasRequestedInsight(true);
       setSummaryExpanded(false);
       if (generatedFresh) {
@@ -3691,7 +3781,7 @@ function JournalDetailScreen({ route, navigation }) {
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={stylesDetail.container}
+          contentContainerStyle={[stylesDetail.container, { paddingBottom: bottomPadding }]}
         >
           <Pressable onPress={() => navigation.goBack()} style={stylesDetail.backButton}>
             <Ionicons name="chevron-back" size={20} color={palette.ink} />
@@ -4023,6 +4113,7 @@ const stylesDetail = StyleSheet.create({
 
 // 📘 Guide screen
 function GuideScreen({ navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(3));
   const [tab, setTab] = useState("Guidance");
   const tabs = ["Guidance", "History", "Glossary"];
 
@@ -4166,7 +4257,7 @@ function GuideScreen({ navigation }) {
           <ScrollView
             contentContainerStyle={{
               paddingHorizontal: theme.space(2.5),
-              paddingBottom: theme.space(3),
+              paddingBottom: bottomPadding,
             paddingTop: theme.space(2.5) + screenTopPadding,
           }}
         >
@@ -4290,6 +4381,7 @@ const stylesGuide = StyleSheet.create({
 
 // 💎 Premium screen
 function PremiumScreen({ navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(4));
   const { isPremium: premiumStatus } = useAuth();
   const {
     packages,
@@ -4341,7 +4433,7 @@ function PremiumScreen({ navigation }) {
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={stylesPremium.container}>
+        <ScrollView contentContainerStyle={[stylesPremium.container, { paddingBottom: bottomPadding }]}>
           <Pressable onPress={() => navigation.goBack()} style={stylesPremium.backButton}>
             <Ionicons name="chevron-back" size={20} color={palette.ink} />
             <Text style={stylesPremium.backLabel}>Back</Text>
@@ -4610,6 +4702,7 @@ const stylesPremium = StyleSheet.create({
 
 // ⚙️ Settings screen
 function SettingsScreen({ navigation }) {
+  const bottomPadding = useBottomSafeSpacing(theme.space(4));
   const [feedback, setFeedback] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -4741,7 +4834,7 @@ function SettingsScreen({ navigation }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={stylesSettings.container}
+            contentContainerStyle={[stylesSettings.container, { paddingBottom: bottomPadding }]}
             keyboardShouldPersistTaps="handled"
           >
             <Pressable onPress={() => navigation.goBack()} style={stylesSettings.backButton}>
@@ -4940,6 +5033,9 @@ function JournalStackScreen() {
 }
 
 function MainTabs() {
+  const { bottom } = useSafeAreaInsets();
+  const tabInset = Math.max(bottom, theme.space(1));
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -4955,13 +5051,16 @@ function MainTabs() {
           shadowRadius: 18,
           shadowOffset: { width: 0, height: -4 },
           elevation: 10,
+          height: 54 + tabInset,
+          paddingBottom: tabInset,
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontFamily: fonts.bodyBold,
           fontSize: 12,
         },
         tabBarItemStyle: {
-          paddingVertical: 6,
+          paddingVertical: 0,
         },
         tabBarIcon: ({ color, size }) => {
           const icons = {
