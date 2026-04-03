@@ -5034,6 +5034,9 @@ function JournalStackScreen() {
 }
 
 function MainTabs() {
+  const { bottom } = useSafeAreaInsets();
+  const tabBarBottomPadding = Math.max(bottom, 6);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -5044,6 +5047,8 @@ function MainTabs() {
           backgroundColor: palette.card,
           borderTopColor: "rgba(176, 139, 49, 0.35)",
           borderTopWidth: 1,
+          paddingBottom: tabBarBottomPadding,
+          height: 60 + tabBarBottomPadding,
           shadowColor: palette.goldDeep,
           shadowOpacity: 0.16,
           shadowRadius: 18,
