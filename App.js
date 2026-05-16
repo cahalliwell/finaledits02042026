@@ -148,8 +148,10 @@ export const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
+    storage: AsyncStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false,
   },
 });
 
