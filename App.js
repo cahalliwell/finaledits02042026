@@ -1842,6 +1842,7 @@ function GlowingHexagon() {
 
 // 🏠 Home screen
 function HomeScreen({ navigation, route }) {
+  const { bottom } = useSafeAreaInsets();
   const [question, setQuestion] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -2002,7 +2003,7 @@ function HomeScreen({ navigation, route }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
@@ -3528,6 +3529,7 @@ const wordCount = (text) => {
 };
 
 function JournalDetailScreen({ route, navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const { id } = route.params || {};
   const { session, isPremium: premiumStatus } = useAuth();
   const userId = session?.user?.id;
@@ -3759,11 +3761,16 @@ function JournalDetailScreen({ route, navigation }) {
 
   return (
     <GradientBackground>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={stylesDetail.container}
-        >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
+      >
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={stylesDetail.container}
+          >
           <Pressable onPress={() => navigation.goBack()} style={stylesDetail.backButton}>
             <Ionicons name="chevron-back" size={20} color={palette.ink} />
             <Text style={stylesDetail.backLabel}>Back</Text>
@@ -4268,8 +4275,9 @@ function GuideScreen({ navigation }) {
             })}
           </View>
           {renderContent()}
-        </ScrollView>
-      </SafeAreaView>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </GradientBackground>
   );
 }
@@ -4706,6 +4714,7 @@ const stylesPremium = StyleSheet.create({
 
 // ⚙️ Settings screen
 function SettingsScreen({ navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const [feedback, setFeedback] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -4833,7 +4842,7 @@ function SettingsScreen({ navigation }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
