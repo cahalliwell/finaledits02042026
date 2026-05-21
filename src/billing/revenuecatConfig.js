@@ -6,7 +6,7 @@ export const REVENUECAT_CONFIG = {
       process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ||
       process.env.REVENUECAT_IOS_API_KEY ||
       process.env.REVENUECAT_API_KEY_IOS ||
-      "",
+      "appl_klunLqlUfYYuALtCEYoORFbAjsw",
     android:
       process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ||
       process.env.REVENUECAT_ANDROID_API_KEY ||
