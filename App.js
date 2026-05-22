@@ -2122,7 +2122,7 @@ function HomeScreen({ navigation, route }) {
           />
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </GradientBackground>
+      </GradientBackground>
   );
 }
 
