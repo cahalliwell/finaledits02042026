@@ -1870,6 +1870,14 @@ function HomeScreen({ navigation, route }) {
     ? profile.email || session?.user?.email || "Not set"
     : session?.user?.email || "Not set";
   const premiumStatusLabel = premiumEntitlementActive ? "Premium" : "Core";
+  const homeScrollRef = useRef(null);
+
+  const handleHomeQuestionFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    requestAnimationFrame(() => {
+      homeScrollRef.current?.scrollToEnd?.({ animated: true });
+    });
+  }, []);
 
   useEffect(() => {
     if (route?.params?.resetQuestion) {
@@ -2007,6 +2015,7 @@ function HomeScreen({ navigation, route }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
+            ref={homeScrollRef}
             contentContainerStyle={stylesHome.container}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
@@ -2041,6 +2050,7 @@ function HomeScreen({ navigation, route }) {
                   placeholder="Ask with sincerity…"
                   placeholderTextColor={palette.inkMuted}
                   style={stylesHome.input}
+                  onFocus={handleHomeQuestionFocus}
                 />
                 <Text style={stylesHome.counter}>{question.length}/150</Text>
 
@@ -3554,6 +3564,14 @@ function JournalDetailScreen({ route, navigation }) {
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const premiumMonthlyLimit = 100;
+  const detailScrollRef = useRef(null);
+
+  const handleDetailNoteFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    requestAnimationFrame(() => {
+      detailScrollRef.current?.scrollToEnd?.({ animated: true });
+    });
+  }, []);
 
   useEffect(() => {
     if (!entry) {
@@ -3770,6 +3788,7 @@ function JournalDetailScreen({ route, navigation }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
+            ref={detailScrollRef}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={stylesDetail.container}
             automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
@@ -3841,6 +3860,7 @@ function JournalDetailScreen({ route, navigation }) {
             multiline
             textAlignVertical="top"
             style={stylesDetail.noteInput}
+            onFocus={handleDetailNoteFocus}
           />
           <Text style={stylesDetail.wordCount}>
             {wordCount(note)}/1000 words{limitReached ? " • Limit reached" : ""}
@@ -4729,6 +4749,14 @@ function SettingsScreen({ navigation }) {
   const { bottom } = useSafeAreaInsets();
   const [feedback, setFeedback] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const settingsScrollRef = useRef(null);
+
+  const handleSettingsFeedbackFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    requestAnimationFrame(() => {
+      settingsScrollRef.current?.scrollToEnd?.({ animated: true });
+    });
+  }, []);
 
   const handleOpenPremium = useCallback(() => {
     navigation.navigate("Premium");
@@ -4858,6 +4886,7 @@ function SettingsScreen({ navigation }) {
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
+            ref={settingsScrollRef}
             contentContainerStyle={stylesSettings.container}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
@@ -4918,6 +4947,7 @@ function SettingsScreen({ navigation }) {
                 placeholderTextColor={palette.inkMuted}
                 multiline
                 style={stylesSettings.feedbackInput}
+                onFocus={handleSettingsFeedbackFocus}
               />
               <GoldButton
                 full
