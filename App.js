@@ -3050,6 +3050,7 @@ const stylesResults = StyleSheet.create({
 
 // 📚 Library screen
 function LibraryScreen({ navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const [hexagrams, setHexagrams] = useState([]);
   const [show, setShow] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -3148,7 +3149,10 @@ function LibraryScreen({ navigation }) {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={stylesLibrary.flatList}
-                contentContainerStyle={stylesLibrary.listContent}
+                contentContainerStyle={[
+                  stylesLibrary.listContent,
+                  { paddingBottom: theme.space(1.5) + Math.max(bottom, 10) },
+                ]}
                 renderItem={({ item }) => (
                   <View
                     style={[
