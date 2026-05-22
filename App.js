@@ -2009,6 +2009,8 @@ function HomeScreen({ navigation, route }) {
           <ScrollView
             contentContainerStyle={stylesHome.container}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           >
             <View style={stylesHome.headerRow}>
               <HelpButton onPress={openGuidance} />
@@ -3770,6 +3772,8 @@ function JournalDetailScreen({ route, navigation }) {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={stylesDetail.container}
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           >
           <Pressable onPress={() => navigation.goBack()} style={stylesDetail.backButton}>
             <Ionicons name="chevron-back" size={20} color={palette.ink} />
@@ -3927,6 +3931,7 @@ function JournalDetailScreen({ route, navigation }) {
 
 const stylesDetail = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: theme.space(2.5),
     paddingBottom: theme.space(4),
     paddingTop: theme.space(2.5) + screenTopPadding,
@@ -4855,6 +4860,8 @@ function SettingsScreen({ navigation }) {
           <ScrollView
             contentContainerStyle={stylesSettings.container}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           >
             <Pressable onPress={() => navigation.goBack()} style={stylesSettings.backButton}>
               <Ionicons name="chevron-back" size={20} color={palette.ink} />
@@ -4937,6 +4944,7 @@ function SettingsScreen({ navigation }) {
 
 const stylesSettings = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: theme.space(2.5),
     paddingBottom: theme.space(4),
     paddingTop: theme.space(2.5) + screenTopPadding,
