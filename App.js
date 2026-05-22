@@ -3920,6 +3920,7 @@ function JournalDetailScreen({ route, navigation }) {
           changingSummaries={modal?.changingSummaries || []}
         />
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </GradientBackground>
   );
 }
@@ -4103,6 +4104,7 @@ const stylesDetail = StyleSheet.create({
 function GuideScreen({ navigation }) {
   const [tab, setTab] = useState("Guidance");
   const tabs = ["Guidance", "History", "Glossary"];
+  const { bottom } = useSafeAreaInsets();
 
   const renderGuidance = () => (
     <SectionCard>
@@ -4240,6 +4242,11 @@ function GuideScreen({ navigation }) {
 
     return (
       <GradientBackground>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
+        >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={{
