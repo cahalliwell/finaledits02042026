@@ -26,6 +26,7 @@ import {
   View,
   useWindowDimensions,
   Share,
+  findNodeHandle,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -1871,12 +1872,15 @@ function HomeScreen({ navigation, route }) {
     : session?.user?.email || "Not set";
   const premiumStatusLabel = premiumEntitlementActive ? "Premium" : "Core";
   const homeScrollRef = useRef(null);
+  const homeQuestionInputRef = useRef(null);
 
   const handleHomeQuestionFocus = useCallback(() => {
     if (Platform.OS !== "ios") return;
-    requestAnimationFrame(() => {
-      homeScrollRef.current?.scrollToEnd?.({ animated: true });
-    });
+    const inputHandle = findNodeHandle(homeQuestionInputRef.current);
+    const responder = homeScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
   }, []);
 
   useEffect(() => {
@@ -2043,6 +2047,7 @@ function HomeScreen({ navigation, route }) {
               <View style={stylesHome.formBlock}>
                 <Text style={stylesHome.prompt}>What question brings you here today?</Text>
                 <TextInput
+                  ref={homeQuestionInputRef}
                   value={question}
                   onChangeText={setQuestion}
                   multiline
@@ -3565,12 +3570,15 @@ function JournalDetailScreen({ route, navigation }) {
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const premiumMonthlyLimit = 100;
   const detailScrollRef = useRef(null);
+  const detailNoteInputRef = useRef(null);
 
   const handleDetailNoteFocus = useCallback(() => {
     if (Platform.OS !== "ios") return;
-    requestAnimationFrame(() => {
-      detailScrollRef.current?.scrollToEnd?.({ animated: true });
-    });
+    const inputHandle = findNodeHandle(detailNoteInputRef.current);
+    const responder = detailScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
   }, []);
 
   useEffect(() => {
@@ -3853,6 +3861,7 @@ function JournalDetailScreen({ route, navigation }) {
 
           <Text style={stylesDetail.noteLabel}>Note</Text>
           <TextInput
+            ref={detailNoteInputRef}
             value={note}
             onChangeText={handleNoteChange}
             placeholder="Write a note..."
@@ -4750,12 +4759,15 @@ function SettingsScreen({ navigation }) {
   const [feedback, setFeedback] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const settingsScrollRef = useRef(null);
+  const settingsFeedbackInputRef = useRef(null);
 
   const handleSettingsFeedbackFocus = useCallback(() => {
     if (Platform.OS !== "ios") return;
-    requestAnimationFrame(() => {
-      settingsScrollRef.current?.scrollToEnd?.({ animated: true });
-    });
+    const inputHandle = findNodeHandle(settingsFeedbackInputRef.current);
+    const responder = settingsScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
   }, []);
 
   const handleOpenPremium = useCallback(() => {
@@ -4941,6 +4953,7 @@ function SettingsScreen({ navigation }) {
                 Share your reflections or suggestions. Your email app will open when you submit.
               </Text>
               <TextInput
+                ref={settingsFeedbackInputRef}
                 value={feedback}
                 onChangeText={setFeedback}
                 placeholder="Type your feedback here"
