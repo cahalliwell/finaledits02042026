@@ -3125,11 +3125,12 @@ function LibraryScreen({ navigation }) {
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }}>
-        <View
-          style={[
+        <ScrollView
+          contentContainerStyle={[
             stylesLibrary.container,
             { paddingBottom: theme.space(3) + Math.max(bottom, 12) },
           ]}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={stylesLibrary.content}>
             <View style={stylesLibrary.header}>
@@ -3183,7 +3184,7 @@ function LibraryScreen({ navigation }) {
               />
             </View>
           </View>
-        </View>
+        </ScrollView>
         <ReadingModal
           visible={show}
           onClose={() => setShow(false)}
