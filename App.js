@@ -3124,7 +3124,12 @@ function LibraryScreen({ navigation }) {
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={stylesLibrary.container}>
+        <View
+          style={[
+            stylesLibrary.container,
+            { paddingBottom: theme.space(3) + Math.max(bottom, 12) },
+          ]}
+        >
           <View style={stylesLibrary.content}>
             <View style={stylesLibrary.header}>
               <Text style={stylesLibrary.title}>Library</Text>
@@ -3240,10 +3245,10 @@ const stylesLibrary = StyleSheet.create({
   },
   carouselWrapper: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   flatList: {
-    flexGrow: 0,
+    flexGrow: 1,
   },
   listContent: {
     paddingHorizontal: theme.space(0.5),
