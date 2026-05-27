@@ -1444,7 +1444,13 @@ function HexagonThumbnail({ uri, hexNumber = null, size = 52 }) {
 }
 
 // 🪞 Hexagram card & modal
-function HexagramCard({ item, onPress, showDetails = true, imageAspectRatio = 1 }) {
+function HexagramCard({
+  item,
+  onPress,
+  showDetails = true,
+  imageAspectRatio = 1,
+  compact = false,
+}) {
   if (!item) return null;
   const hasImage = !!item.imageUrl;
   return (
@@ -1476,10 +1482,17 @@ function HexagramCard({ item, onPress, showDetails = true, imageAspectRatio = 1 
         )}
       </View>
       {showDetails ? (
-        <View style={stylesHexagramCard.details}>
-          <Text style={stylesHexagramCard.name}>{item.name}</Text>
+        <View style={[stylesHexagramCard.details, compact && stylesHexagramCard.detailsCompact]}>
+          <Text
+            style={[stylesHexagramCard.name, compact && stylesHexagramCard.nameCompact]}
+            numberOfLines={2}
+          >
+            {item.name}
+          </Text>
           {item.number ? (
-            <Text style={stylesHexagramCard.subtitle}>Hexagram {item.number}</Text>
+            <Text style={[stylesHexagramCard.subtitle, compact && stylesHexagramCard.subtitleCompact]}>
+              Hexagram {item.number}
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -1506,16 +1519,28 @@ const stylesHexagramCard = StyleSheet.create({
   details: {
     padding: theme.space(1.5),
   },
+  detailsCompact: {
+    paddingHorizontal: theme.space(1.25),
+    paddingVertical: theme.space(1),
+  },
   name: {
     fontFamily: fonts.title,
     fontSize: 20,
     color: palette.ink,
+  },
+  nameCompact: {
+    fontSize: 16,
+    lineHeight: 20,
   },
   subtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
     color: palette.inkMuted,
     marginTop: 4,
+  },
+  subtitleCompact: {
+    fontSize: 13,
+    marginTop: 2,
   },
 });
 
@@ -3164,13 +3189,18 @@ function LibraryScreen({ navigation }) {
                   <View
                     style={[
                       stylesLibrary.cardSlot,
-                      { width: Math.max(240, width - theme.space(5)) },
+                      {
+                        width: compactLibraryLayout
+                          ? Math.max(220, width - theme.space(7))
+                          : Math.max(240, width - theme.space(5)),
+                      },
                     ]}
                   >
                     <HexagramCard
                       item={item}
                       onPress={() => openHexagram(item)}
-                      imageAspectRatio={compactLibraryLayout ? 0.86 : 1}
+                      imageAspectRatio={compactLibraryLayout ? 0.76 : 1}
+                      compact={compactLibraryLayout}
                     />
                   </View>
                 )}
