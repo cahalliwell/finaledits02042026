@@ -1444,7 +1444,7 @@ function HexagonThumbnail({ uri, hexNumber = null, size = 52 }) {
 }
 
 // 🪞 Hexagram card & modal
-function HexagramCard({ item, onPress, showDetails = true }) {
+function HexagramCard({ item, onPress, showDetails = true, imageAspectRatio = 1 }) {
   if (!item) return null;
   const hasImage = !!item.imageUrl;
   return (
@@ -1462,7 +1462,7 @@ function HexagramCard({ item, onPress, showDetails = true }) {
         },
       ]}
     >
-      <View style={stylesHexagramCard.imageWrapper}>
+      <View style={[stylesHexagramCard.imageWrapper, { aspectRatio: imageAspectRatio }]}>
         {hasImage ? (
           <Image
             source={{ uri: item.imageUrl }}
@@ -3055,7 +3055,8 @@ function LibraryScreen({ navigation }) {
   const [show, setShow] = useState(false);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const compactLibraryLayout = Platform.OS === "ios" && height < 750;
   const isFocused = useIsFocused();
   const {
     visible: guidanceVisible,
@@ -3168,6 +3169,7 @@ function LibraryScreen({ navigation }) {
                     <HexagramCard
                       item={item}
                       onPress={() => openHexagram(item)}
+                      imageAspectRatio={compactLibraryLayout ? 0.86 : 1}
                     />
                   </View>
                 )}
