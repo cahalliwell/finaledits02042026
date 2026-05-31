@@ -26,6 +26,7 @@ import {
   View,
   useWindowDimensions,
   Share,
+  findNodeHandle,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -148,8 +149,10 @@ export const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
+    storage: AsyncStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false,
   },
 });
 
@@ -757,6 +760,61 @@ function JournalProvider({ children }) {
     [entries, premiumMember, authReady, userId, updateEntriesState]
   );
 
+  const ensureEntryCloudBacked = useCallback(
+    async (id) => {
+      const targetEntry = entries.find((item) => item.id === id);
+      if (!targetEntry) {
+        throw new Error("Entry not found.");
+      }
+      if (targetEntry.synced && !String(targetEntry.id).startsWith("local-")) {
+        return { entryId: targetEntry.id, syncedNow: false };
+      }
+      if (!premiumMember || !authReady || !userId) {
+        throw new Error("Cloud backup requires an active Premium account.");
+      }
+      if (remoteCount >= 1000) {
+        throw new Error(
+          "Premium backup can store up to 1,000 entries. New readings will remain on this device."
+        );
+      }
+
+      const summaryPayload = {
+        primary: targetEntry.primary ?? null,
+        resulting: targetEntry.resulting ?? null,
+        primaryLines: targetEntry.primaryLines ?? [],
+        resultingLines: targetEntry.resultingLines ?? [],
+      };
+
+      const { data, error } = await supabase
+        .from("JournalEntries")
+        .insert({
+          user_id: userId,
+          question: targetEntry.question ?? "",
+          notes: targetEntry.note ?? "",
+          hexagram_primary: targetEntry.primary?.number ?? null,
+          hexagram_resulting: targetEntry.resulting?.number ?? null,
+          summary: JSON.stringify(summaryPayload),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const hydrated = { ...hydrateEntry(data, summaryPayload), synced: true };
+      updateEntriesState((prev) => {
+        const next = prev.map((item) => (item.id === id ? hydrated : item));
+        next.sort((a, b) => b.createdAt - a.createdAt);
+        return next;
+      });
+      setRemoteCount((prev) => prev + 1);
+
+      return { entryId: hydrated.id, syncedNow: true };
+    },
+    [entries, premiumMember, authReady, userId, remoteCount, hydrateEntry, updateEntriesState]
+  );
+
   const confirmDelete = useCallback(
     (id) => {
       Alert.alert("Delete entry?", "Are you sure you want to remove this entry?", [
@@ -779,6 +837,7 @@ function JournalProvider({ children }) {
       updateEntryNote,
       setEntryAiSummary,
       fetchEntryAiSummary,
+      ensureEntryCloudBacked,
       removeEntry,
       confirmDelete,
       refreshEntries: loadEntries,
@@ -790,6 +849,7 @@ function JournalProvider({ children }) {
       updateEntryNote,
       setEntryAiSummary,
       fetchEntryAiSummary,
+      ensureEntryCloudBacked,
       removeEntry,
       confirmDelete,
       loadEntries,
@@ -1384,7 +1444,13 @@ function HexagonThumbnail({ uri, hexNumber = null, size = 52 }) {
 }
 
 // 🪞 Hexagram card & modal
-function HexagramCard({ item, onPress, showDetails = true }) {
+function HexagramCard({
+  item,
+  onPress,
+  showDetails = true,
+  imageAspectRatio = 1,
+  compact = false,
+}) {
   if (!item) return null;
   const hasImage = !!item.imageUrl;
   return (
@@ -1402,7 +1468,7 @@ function HexagramCard({ item, onPress, showDetails = true }) {
         },
       ]}
     >
-      <View style={stylesHexagramCard.imageWrapper}>
+      <View style={[stylesHexagramCard.imageWrapper, { aspectRatio: imageAspectRatio }]}>
         {hasImage ? (
           <Image
             source={{ uri: item.imageUrl }}
@@ -1416,10 +1482,17 @@ function HexagramCard({ item, onPress, showDetails = true }) {
         )}
       </View>
       {showDetails ? (
-        <View style={stylesHexagramCard.details}>
-          <Text style={stylesHexagramCard.name}>{item.name}</Text>
+        <View style={[stylesHexagramCard.details, compact && stylesHexagramCard.detailsCompact]}>
+          <Text
+            style={[stylesHexagramCard.name, compact && stylesHexagramCard.nameCompact]}
+            numberOfLines={2}
+          >
+            {item.name}
+          </Text>
           {item.number ? (
-            <Text style={stylesHexagramCard.subtitle}>Hexagram {item.number}</Text>
+            <Text style={[stylesHexagramCard.subtitle, compact && stylesHexagramCard.subtitleCompact]}>
+              Hexagram {item.number}
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -1446,16 +1519,28 @@ const stylesHexagramCard = StyleSheet.create({
   details: {
     padding: theme.space(1.5),
   },
+  detailsCompact: {
+    paddingHorizontal: theme.space(1.25),
+    paddingVertical: theme.space(1),
+  },
   name: {
     fontFamily: fonts.title,
     fontSize: 20,
     color: palette.ink,
+  },
+  nameCompact: {
+    fontSize: 16,
+    lineHeight: 20,
   },
   subtitle: {
     fontFamily: fonts.body,
     fontSize: 14,
     color: palette.inkMuted,
     marginTop: 4,
+  },
+  subtitleCompact: {
+    fontSize: 13,
+    marginTop: 2,
   },
 });
 
@@ -1783,6 +1868,7 @@ function GlowingHexagon() {
 
 // 🏠 Home screen
 function HomeScreen({ navigation, route }) {
+  const { bottom } = useSafeAreaInsets();
   const [question, setQuestion] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -1810,6 +1896,17 @@ function HomeScreen({ navigation, route }) {
     ? profile.email || session?.user?.email || "Not set"
     : session?.user?.email || "Not set";
   const premiumStatusLabel = premiumEntitlementActive ? "Premium" : "Core";
+  const homeScrollRef = useRef(null);
+  const homeQuestionInputRef = useRef(null);
+
+  const handleHomeQuestionFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    const inputHandle = findNodeHandle(homeQuestionInputRef.current);
+    const responder = homeScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
+  }, []);
 
   useEffect(() => {
     if (route?.params?.resetQuestion) {
@@ -1943,12 +2040,15 @@ function HomeScreen({ navigation, route }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
+            ref={homeScrollRef}
             contentContainerStyle={stylesHome.container}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           >
             <View style={stylesHome.headerRow}>
               <HelpButton onPress={openGuidance} />
@@ -1972,6 +2072,7 @@ function HomeScreen({ navigation, route }) {
               <View style={stylesHome.formBlock}>
                 <Text style={stylesHome.prompt}>What question brings you here today?</Text>
                 <TextInput
+                  ref={homeQuestionInputRef}
                   value={question}
                   onChangeText={setQuestion}
                   multiline
@@ -1979,6 +2080,7 @@ function HomeScreen({ navigation, route }) {
                   placeholder="Ask with sincerity…"
                   placeholderTextColor={palette.inkMuted}
                   style={stylesHome.input}
+                  onFocus={handleHomeQuestionFocus}
                 />
                 <Text style={stylesHome.counter}>{question.length}/150</Text>
 
@@ -2062,7 +2164,7 @@ function HomeScreen({ navigation, route }) {
           />
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </GradientBackground>
+      </GradientBackground>
   );
 }
 
@@ -2973,11 +3075,13 @@ const stylesResults = StyleSheet.create({
 
 // 📚 Library screen
 function LibraryScreen({ navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const [hexagrams, setHexagrams] = useState([]);
   const [show, setShow] = useState(false);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const compactLibraryLayout = Platform.OS === "ios" && height < 750;
   const isFocused = useIsFocused();
   const {
     visible: guidanceVisible,
@@ -3046,7 +3150,13 @@ function LibraryScreen({ navigation }) {
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={stylesLibrary.container}>
+        <ScrollView
+          contentContainerStyle={[
+            stylesLibrary.container,
+            { paddingBottom: theme.space(3) + Math.max(bottom, 12) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={stylesLibrary.content}>
             <View style={stylesLibrary.header}>
               <Text style={stylesLibrary.title}>Library</Text>
@@ -3071,17 +3181,26 @@ function LibraryScreen({ navigation }) {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={stylesLibrary.flatList}
-                contentContainerStyle={stylesLibrary.listContent}
+                contentContainerStyle={[
+                  stylesLibrary.listContent,
+                  { paddingBottom: theme.space(1.5) + Math.max(bottom, 10) },
+                ]}
                 renderItem={({ item }) => (
                   <View
                     style={[
                       stylesLibrary.cardSlot,
-                      { width: Math.max(240, width - theme.space(5)) },
+                      {
+                        width: compactLibraryLayout
+                          ? Math.max(220, width - theme.space(7))
+                          : Math.max(240, width - theme.space(5)),
+                      },
                     ]}
                   >
                     <HexagramCard
                       item={item}
                       onPress={() => openHexagram(item)}
+                      imageAspectRatio={compactLibraryLayout ? 0.76 : 1}
+                      compact={compactLibraryLayout}
                     />
                   </View>
                 )}
@@ -3095,7 +3214,7 @@ function LibraryScreen({ navigation }) {
               />
             </View>
           </View>
-        </View>
+        </ScrollView>
         <ReadingModal
           visible={show}
           onClose={() => setShow(false)}
@@ -3159,10 +3278,10 @@ const stylesLibrary = StyleSheet.create({
   },
   carouselWrapper: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   flatList: {
-    flexGrow: 0,
+    flexGrow: 1,
   },
   listContent: {
     paddingHorizontal: theme.space(0.5),
@@ -3469,10 +3588,11 @@ const wordCount = (text) => {
 };
 
 function JournalDetailScreen({ route, navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const { id } = route.params || {};
   const { session, isPremium: premiumStatus } = useAuth();
   const userId = session?.user?.id;
-  const { entries, updateEntryNote, setEntryAiSummary, fetchEntryAiSummary } =
+  const { entries, updateEntryNote, setEntryAiSummary, fetchEntryAiSummary, ensureEntryCloudBacked } =
     useJournal();
   const { premiumPriceString } = useRevenueCat();
   const startPremiumPurchase = usePremiumPurchaseFlow();
@@ -3491,6 +3611,17 @@ function JournalDetailScreen({ route, navigation }) {
   const [aiUsageCount, setAiUsageCount] = useState(0);
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const premiumMonthlyLimit = 100;
+  const detailScrollRef = useRef(null);
+  const detailNoteInputRef = useRef(null);
+
+  const handleDetailNoteFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    const inputHandle = findNodeHandle(detailNoteInputRef.current);
+    const responder = detailScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!entry) {
@@ -3606,13 +3737,25 @@ function JournalDetailScreen({ route, navigation }) {
     setSummaryLoading(true);
 
     try {
+      let entryIdForInsight = entry.id;
+      const requiresCloudBackup =
+        !entry.synced || String(entry.id).startsWith("local-");
+
+      if (requiresCloudBackup) {
+        const cloudSyncResult = await ensureEntryCloudBacked(entry.id);
+        entryIdForInsight = cloudSyncResult.entryId;
+        if (cloudSyncResult.syncedNow && cloudSyncResult.entryId !== entry.id) {
+          navigation.setParams({ id: cloudSyncResult.entryId });
+        }
+      }
+
       // Reuse any cached AI insight before making a new request
       let summaryText = aiSummary || entry.aiSummary || "";
       let generatedFresh = false;
 
       if (!summaryText) {
         try {
-          summaryText = await fetchEntryAiSummary(entry.id);
+          summaryText = await fetchEntryAiSummary(entryIdForInsight);
         } catch (lookupError) {
           console.log(
             "AI summary lookup error:",
@@ -3622,7 +3765,7 @@ function JournalDetailScreen({ route, navigation }) {
       }
 
       if (!summaryText) {
-        const payload = { entry_id: entry.id, user_id: userId };
+        const payload = { entry_id: entryIdForInsight, user_id: userId };
         console.log("Invoking AI summary with payload:", payload);
 
         const accessToken = session?.access_token || SUPABASE_ANON_KEY;
@@ -3668,7 +3811,7 @@ function JournalDetailScreen({ route, navigation }) {
 
       setSummaryError("");
       setAiSummary(summaryText);
-      setEntryAiSummary(entry.id, summaryText);
+      setEntryAiSummary(entryIdForInsight, summaryText);
       setHasRequestedInsight(true);
       setSummaryExpanded(false);
       if (generatedFresh) {
@@ -3688,11 +3831,19 @@ function JournalDetailScreen({ route, navigation }) {
 
   return (
     <GradientBackground>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={stylesDetail.container}
-        >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
+      >
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView
+            ref={detailScrollRef}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={stylesDetail.container}
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          >
           <Pressable onPress={() => navigation.goBack()} style={stylesDetail.backButton}>
             <Ionicons name="chevron-back" size={20} color={palette.ink} />
             <Text style={stylesDetail.backLabel}>Back</Text>
@@ -3752,6 +3903,7 @@ function JournalDetailScreen({ route, navigation }) {
 
           <Text style={stylesDetail.noteLabel}>Note</Text>
           <TextInput
+            ref={detailNoteInputRef}
             value={note}
             onChangeText={handleNoteChange}
             placeholder="Write a note..."
@@ -3759,6 +3911,7 @@ function JournalDetailScreen({ route, navigation }) {
             multiline
             textAlignVertical="top"
             style={stylesDetail.noteInput}
+            onFocus={handleDetailNoteFocus}
           />
           <Text style={stylesDetail.wordCount}>
             {wordCount(note)}/1000 words{limitReached ? " • Limit reached" : ""}
@@ -3842,12 +3995,14 @@ function JournalDetailScreen({ route, navigation }) {
           changingSummaries={modal?.changingSummaries || []}
         />
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </GradientBackground>
   );
 }
 
 const stylesDetail = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: theme.space(2.5),
     paddingBottom: theme.space(4),
     paddingTop: theme.space(2.5) + screenTopPadding,
@@ -4025,6 +4180,7 @@ const stylesDetail = StyleSheet.create({
 function GuideScreen({ navigation }) {
   const [tab, setTab] = useState("Guidance");
   const tabs = ["Guidance", "History", "Glossary"];
+  const { bottom } = useSafeAreaInsets();
 
   const renderGuidance = () => (
     <SectionCard>
@@ -4162,6 +4318,11 @@ function GuideScreen({ navigation }) {
 
     return (
       <GradientBackground>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
+        >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={{
@@ -4197,8 +4358,9 @@ function GuideScreen({ navigation }) {
             })}
           </View>
           {renderContent()}
-        </ScrollView>
-      </SafeAreaView>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </GradientBackground>
   );
 }
@@ -4333,6 +4495,21 @@ function PremiumScreen({ navigation }) {
     return outcome;
   }, [restorePurchases]);
 
+  const handleManageSubscription = useCallback(async () => {
+    const targetUrl =
+      Platform.OS === "ios"
+        ? "https://apps.apple.com/account/subscriptions"
+        : "https://play.google.com/store/account/subscriptions";
+    try {
+      await Linking.openURL(targetUrl);
+    } catch (error) {
+      Alert.alert(
+        "Unable to open subscriptions",
+        "We couldn't open subscription management. Please open your App Store or Google Play subscriptions manually."
+      );
+    }
+  }, []);
+
   const premiumButtonLabel = premiumPriceString
     ? `Upgrade to Premium (${premiumPriceString})`
     : "Upgrade to Premium";
@@ -4441,6 +4618,16 @@ function PremiumScreen({ navigation }) {
             >
               Restore purchases
             </GoldButton>
+            {premiumActive ? (
+              <GoldButton
+                full
+                kind="secondary"
+                onPress={handleManageSubscription}
+                icon={<Ionicons name="settings-outline" size={18} color={palette.gold} />}
+              >
+                Manage Subscription
+              </GoldButton>
+            ) : null}
           </SectionCard>
         </ScrollView>
       </SafeAreaView>
@@ -4610,8 +4797,20 @@ const stylesPremium = StyleSheet.create({
 
 // ⚙️ Settings screen
 function SettingsScreen({ navigation }) {
+  const { bottom } = useSafeAreaInsets();
   const [feedback, setFeedback] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const settingsScrollRef = useRef(null);
+  const settingsFeedbackInputRef = useRef(null);
+
+  const handleSettingsFeedbackFocus = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    const inputHandle = findNodeHandle(settingsFeedbackInputRef.current);
+    const responder = settingsScrollRef.current?.getScrollResponder?.();
+    if (inputHandle && responder?.scrollResponderScrollNativeHandleToKeyboard) {
+      responder.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 24, true);
+    }
+  }, []);
 
   const handleOpenPremium = useCallback(() => {
     navigation.navigate("Premium");
@@ -4737,12 +4936,15 @@ function SettingsScreen({ navigation }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(16, bottom) : 0}
       >
         <SafeAreaView style={{ flex: 1 }}>
           <ScrollView
+            ref={settingsScrollRef}
             contentContainerStyle={stylesSettings.container}
             keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           >
             <Pressable onPress={() => navigation.goBack()} style={stylesSettings.backButton}>
               <Ionicons name="chevron-back" size={20} color={palette.ink} />
@@ -4793,12 +4995,14 @@ function SettingsScreen({ navigation }) {
                 Share your reflections or suggestions. Your email app will open when you submit.
               </Text>
               <TextInput
+                ref={settingsFeedbackInputRef}
                 value={feedback}
                 onChangeText={setFeedback}
                 placeholder="Type your feedback here"
                 placeholderTextColor={palette.inkMuted}
                 multiline
                 style={stylesSettings.feedbackInput}
+                onFocus={handleSettingsFeedbackFocus}
               />
               <GoldButton
                 full
@@ -4825,6 +5029,7 @@ function SettingsScreen({ navigation }) {
 
 const stylesSettings = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: theme.space(2.5),
     paddingBottom: theme.space(4),
     paddingTop: theme.space(2.5) + screenTopPadding,
@@ -4940,6 +5145,9 @@ function JournalStackScreen() {
 }
 
 function MainTabs() {
+  const { bottom } = useSafeAreaInsets();
+  const tabBarBottomPadding = Math.max(bottom, 6);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -4950,6 +5158,8 @@ function MainTabs() {
           backgroundColor: palette.card,
           borderTopColor: "rgba(176, 139, 49, 0.35)",
           borderTopWidth: 1,
+          paddingBottom: tabBarBottomPadding,
+          height: 60 + tabBarBottomPadding,
           shadowColor: palette.goldDeep,
           shadowOpacity: 0.16,
           shadowRadius: 18,
